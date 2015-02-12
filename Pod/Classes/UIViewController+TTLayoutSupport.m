@@ -26,12 +26,15 @@
 
 @end
 
+#pragma mark - TTLayoutSupport
+
 @implementation UIViewController (TTLayoutSupport)
 
 + (void)load
 {
     [self swizzle:[self class] from:@selector(topLayoutGuide) to:@selector(tt_topLayoutGuide)];
     [self swizzle:[self class] from:@selector(bottomLayoutGuide) to:@selector(tt_bottomLayoutGuide)];
+    [self swizzle:[self class] from:@selector(view) to:@selector(tt_view)];
 }
 
 + (void)swizzle:(Class)class from:(SEL)originalSel to:(SEL)newSel
@@ -210,7 +213,70 @@
     return [layoutSupportConstraints allObjects];
 }
 
+#pragma mark -
+
+- (UIView *)tt_view
+{
+    if(self.isViewLoaded)
+    {
+        return [self tt_view];
+    }
+    
+    // create the view
+    UIView *view = [self tt_view];
+    
+    // look for the support layout constraints that we set up internally for layout guides
+    
+    NSArray *constraints = view.constraints;
+    
+    NSMutableArray *recordedTopLayoutConstraints = [NSMutableArray array];
+    NSMutableArray *recordedBottomLayoutConstraints = [NSMutableArray array];
+    
+    NSArray *supportConstraints = [self filterSupportConstraints:constraints];
+    for(NSLayoutConstraint *constraint in supportConstraints)
+    {
+        if(constraint.firstItem == self.topLayoutGuide)
+        {
+            [recordedTopLayoutConstraints addObject:constraint];
+        }
+        else if(constraint.firstItem == self.bottomLayoutGuide)
+        {
+            [recordedBottomLayoutConstraints addObject:constraint];
+        }
+    }
+    
+    // store them
+    self.tt_recordedBottomLayoutSupportConstraints = recordedBottomLayoutConstraints;
+    self.tt_recordedTopLayoutSupportConstraints = recordedTopLayoutConstraints;
+    
+    // they will be exchanged if the toplayoutguidelength is accessed or modified
+    
+    return view;
+}
+
+- (NSArray *)filterSupportConstraints:(NSArray *)constraints
+{
+    NSMutableArray *supportConstraints = [NSMutableArray array];
+    
+    for(NSLayoutConstraint *constraint in constraints)
+    {
+        if(![constraint isMemberOfClass:[NSLayoutConstraint class]])
+        {
+            BOOL isLayoutGuide = [constraint.firstItem conformsToProtocol:@protocol(UILayoutSupport)];
+            
+            if(isLayoutGuide)
+            {
+                //id<UILayoutSupport> guide = (id<UILayoutSupport>)constraint.firstItem;
+                [supportConstraints addObject:constraint];
+            }
+        }
+    }
+    return supportConstraints;
+}
+
 @end
+
+#pragma mark - TTLayoutSupportPrivate
 
 @implementation UIViewController (TTLayoutSupportPrivate)
 
